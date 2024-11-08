@@ -10,7 +10,7 @@ from printer_control import create_printer
 with open("config.json", "r") as f:
     config = json.load(f)
 
-printer = create_printer(config_path)
+printer = create_printer("config.json")
 client = TikTokLiveClient(unique_id=config['tiktok']['unique_id'])
 
 @client.on(ConnectEvent)
