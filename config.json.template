@@ -31,6 +31,6 @@
     "logging": {
         "level": "INFO",
         "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        "file": "printer_stream.log"
+        "file": "logs/printer_stream.log"
     }
 }
