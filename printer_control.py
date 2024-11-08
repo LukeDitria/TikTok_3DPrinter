@@ -142,6 +142,7 @@ class RealPrinter(BasePrinter):
         self.heat_hotend(self.config.extrude_temp)
 
         self.home()
+
         self.move(
             x=self.config.max_dimensions['x'] // 2,
             y=self.config.max_dimensions['y'] // 2,
@@ -149,18 +150,17 @@ class RealPrinter(BasePrinter):
         )
 
     def send_gcode(self, command: str) -> str:
-        self.logger.debug(f"Sending command: {command}")
-        self.serial.write(f"{command}\n".encode())
+        print(f"Sending command: {command.strip()}")
+        self.serial.write(command.encode())
         self.serial.flush()
-        return self.await_response()
 
-    def await_response(self) -> str:
         while True:
             response = self.serial.readline().decode().strip()
             if response:
-                self.logger.debug(f"Printer response: {response}")
-            if response.startswith("ok"):
+                print(f"Printer response: {response}")
+            if response[:2] == "ok":
                 break
+
         return response
 
     def heat_hotend(self, target_temp: int) -> None:
