@@ -150,7 +150,8 @@ class RealPrinter(BasePrinter):
         )
 
     def send_gcode(self, command: str) -> str:
-        print(f"Sending command: {command.strip()}")
+        self.logger.info(f"Sending command: {command.strip()}")
+
         self.serial.write(command.encode())
         self.serial.flush()
 
