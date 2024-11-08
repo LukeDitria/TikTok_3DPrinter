@@ -3,12 +3,18 @@ from TikTokLive import TikTokLiveClient
 from TikTokLive.events import ConnectEvent, CommentEvent, GiftEvent
 import asyncio
 from threading import Thread
-import os
+import logging
 
 from printer_control import create_printer
 
 with open("config.json", "r") as f:
     config = json.load(f)
+
+logging.basicConfig(
+    level=getattr(logging, config['logging']['level']),
+    format=config['logging']['format'],
+    filename=config['logging']['file']
+)
 
 printer = create_printer("config.json")
 printer.setup_printer()

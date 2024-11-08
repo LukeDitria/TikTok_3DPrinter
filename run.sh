@@ -25,7 +25,7 @@ case "$1" in
             echo "Starting TikTok Printer Controller..."
             # Run the process in background and save PID
             nohup python3 tiktok_printer_run.py > logs/output.log 2>&1 & echo $! > process.pid
-            echo "Started! Check logs/output.log for details"
+            echo "Started!"
         fi
         ;;
     stop)
@@ -46,7 +46,7 @@ case "$1" in
         fi
         ;;
     logs)
-        tail -f logs/output.log
+        tail -f logs/printer_stream.log
         ;;
     *)
         echo "Usage: $0 {start|stop|status|logs}"

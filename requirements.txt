@@ -1,2 +1,2 @@
-serial==0.0.97
+pyserial==3.5
 TikTokLive==6.1.8
