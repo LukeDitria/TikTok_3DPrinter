@@ -1,246 +1,210 @@
-# import os
-# from twitchio.ext import commands
 import serial
 import time
+import json
+import logging
 from queue import Queue
-# from threading import Thread
-# import asyncio
-# import json
 import random
+from dataclasses import dataclass
+from typing import Optional, Dict, Any
+from abc import ABC, abstractmethod
 
-class Printer:
-    XMAX = 200
-    YMAX = 200
-    ZMAX = 200
 
-    def __init__(self, port='/dev/ttyUSB0', baudrate=115200):
-        self.serial = serial.Serial(port, baudrate, timeout=1)
-        self.serial.flushInput()
-        self.serial.flushOutput()
-        self.x_pos = 0
-        self.y_pos = 0
-        self.z_pos = 0
-        self.increment = 10  # Movement increment (in mm)
-        self.extrude_amount = 2  # Extrusion amount (in mm of filament)
-        self.feedrate = 1500  # Default feedrate (in mm/min)
-        self.command_queue = Queue(maxsize=10)
+@dataclass
+class PrinterConfig:
+    port: str
+    baudrate: int
+    move_increment: int
+    extrude_amount: float
+    extrude_temp: int
+    feed_rate: int
+    max_dimensions: Dict[str, int]
+    safety: Dict[str, Any]
+    simulation: Dict[str, Any]
+
+
+class BasePrinter(ABC):
+    def __init__(self, config: PrinterConfig):
+        self.config = config
+        self.x_pos = self.y_pos = self.z_pos = 0
+        self.command_queue = Queue(maxsize=config.safety['max_queue_size'])
         self.total_filament = 0
         self.running = True
+        self.setup_logger()
 
-    def send_gcode(self, command):
-        print(f"Sending command: {command.strip()}")
-        self.serial.write(command.encode())
+    def setup_logger(self):
+        self.logger = logging.getLogger(self.__class__.__name__)
+
+    @abstractmethod
+    def setup_printer(self):
+        pass
+
+    @abstractmethod
+    def send_gcode(self, command: str) -> str:
+        pass
+
+    @abstractmethod
+    def heat_hotend(self, target_temp: int):
+        pass
+
+    def validate_temperature(self, temp: int) -> bool:
+        return self.config.safety['min_extrude_temp'] <= temp <= self.config.safety['max_extrude_temp']
+
+    def validate_position(self, x: Optional[float] = None, y: Optional[float] = None,
+                          z: Optional[float] = None) -> tuple:
+        max_dim = self.config.max_dimensions
+        new_x = min(max(0, x), max_dim['x']) if x is not None else self.x_pos
+        new_y = min(max(0, y), max_dim['y']) if y is not None else self.y_pos
+        new_z = min(max(0, z), max_dim['z']) if z is not None else self.z_pos
+        return new_x, new_y, new_z
+
+    def move(self, x: Optional[float] = None, y: Optional[float] = None,
+             z: Optional[float] = None, extrude: bool = False) -> None:
+        new_x, new_y, new_z = self.validate_position(x, y, z)
+
+        if all(curr == new for curr, new in
+               zip([self.x_pos, self.y_pos, self.z_pos], [new_x, new_y, new_z])):
+            return
+
+        command = f"G{'1' if extrude else '0'} "
+        updates = []
+
+        for axis, pos, new_pos in [('X', self.x_pos, new_x),
+                                   ('Y', self.y_pos, new_y),
+                                   ('Z', self.z_pos, new_z)]:
+            if pos != new_pos:
+                updates.append(f"{axis}{new_pos}")
+
+        if updates:
+            command += " ".join(updates)
+            if extrude:
+                command += f" E{self.config.extrude_amount}"
+                self.total_filament -= self.config.extrude_amount
+            command += f" F{self.config.feed_rate}"
+            self.send_gcode(command)
+
+            self.x_pos, self.y_pos, self.z_pos = new_x, new_y, new_z
+
+    def process_command(self, command: str, extrude: bool = False) -> None:
+        movement_map = {
+            "back": (None, self.y_pos + self.config.move_increment, None),
+            "forward": (None, self.y_pos - self.config.move_increment, None),
+            "left": (self.x_pos - self.config.move_increment, None, None),
+            "right": (self.x_pos + self.config.move_increment, None, None),
+            "up": (None, None, self.z_pos + self.config.move_increment),
+            "down": (None, None, self.z_pos - self.config.move_increment)
+        }
+
+        if command in movement_map:
+            self.move(*movement_map[command], extrude=extrude)
+
+    def run(self) -> None:
+        self.logger.info("Starting printer control loop")
+        while self.running:
+            try:
+                if not self.command_queue.empty():
+                    command = self.command_queue.get()
+                    should_extrude = self.total_filament >= self.config.extrude_amount
+                    self.process_command(command, extrude=should_extrude)
+                time.sleep(0.1)
+            except Exception as e:
+                self.logger.error(f"Error in printer control loop: {e}")
+
+    def stop(self) -> None:
+        self.logger.info("Stopping printer")
+        self.running = False
+
+
+class RealPrinter(BasePrinter):
+    def setup_printer(self):
+        self.serial = serial.Serial(
+            self.config.port,
+            self.config.baudrate,
+            timeout=1
+        )
+        self.serial.flushInput()
+        self.serial.flushOutput()
+
+        if self.validate_temperature(self.config.extrude_temp):
+            self.heat_hotend(self.config.extrude_temp)
+        self.home()
+        self.move(
+            x=self.config.max_dimensions['x'] // 2,
+            y=self.config.max_dimensions['y'] // 2,
+            z=self.config.max_dimensions['z'] // 4
+        )
+
+    def send_gcode(self, command: str) -> str:
+        self.logger.debug(f"Sending command: {command}")
+        self.serial.write(f"{command}\n".encode())
         self.serial.flush()
+        return self.await_response()
 
+    def await_response(self) -> str:
         while True:
             response = self.serial.readline().decode().strip()
             if response:
-                print(f"Printer response: {response}")
-            if response[:2] == "ok":
+                self.logger.debug(f"Printer response: {response}")
+            if response.startswith("ok"):
                 break
-
         return response
 
-    def heat_hotend(self, target_temp=210):
-        print(f"Heating hotend to {target_temp}C...")
-        self.send_gcode(f"M104 S{target_temp}\n")
+    def heat_hotend(self, target_temp: int) -> None:
+        self.logger.info(f"Heating hotend to {target_temp}°C")
+        self.send_gcode(f"M104 S{target_temp}")
         while True:
-            response = self.send_gcode("M105\n")
+            response = self.send_gcode("M105")
             if "T:" in response:
-                current_temp = float(response.split("T:")[1].split(" ")[0])
-                print(f"Current hotend temperature: {current_temp}C")
+                current_temp = float(response.split("T:")[1].split()[0])
+                self.logger.debug(f"Current hotend temperature: {current_temp}°C")
                 if current_temp >= target_temp:
-                    print("Hotend reached target temperature.")
+                    self.logger.info("Hotend reached target temperature")
                     break
             time.sleep(1)
-        return response
 
-    def home(self):
-        print("Homing printer...")
-        _ = self.send_gcode("G28\n")
-        self.x_pos = 0
-        self.y_pos = 0
-        self.z_pos = 0
-
-        # set printer extruder to relative mode
-        # all other movements are absolute
-        _ = self.send_gcode("M83\n")
+    def home(self) -> None:
+        self.logger.info("Homing printer")
+        self.send_gcode("G28")
+        self.x_pos = self.y_pos = self.z_pos = 0
+        self.send_gcode("M83")  # Set extruder to relative mode
 
 
-    # TODO clean this up... should better combine this with process_command
-    def move(self, x=None, y=None, z=None, extrude=False):
-        command = f"G{'1' if extrude else '0'} "
-
-        if x is not None:
-            new_pos = max(0, min(self.XMAX, x))
-            if not new_pos == self.x_pos:
-                self.x_pos = new_pos
-                command += f"X{self.x_pos} "
-            else:
-                command = None
-
-        if y is not None:
-            new_pos = max(0, min(self.YMAX, y))
-            if not new_pos == self.y_pos:
-                self.y_pos = new_pos
-                command += f"Y{self.y_pos} "
-            else:
-                command = None
-
-        if z is not None:
-            new_pos = max(0, min(self.ZMAX, z))
-            if not new_pos == self.z_pos:
-                self.z_pos = new_pos
-                command += f"Z{self.z_pos} "
-            else:
-                command = None
-
-        if command is not None:
-            if extrude:
-                command += f"E{self.extrude_amount * 5} "
-                self.total_filament -= self.extrude_amount
-
-            command += f"F{self.feedrate}\n"
-            self.send_gcode(command)
-
-    def process_command(self, command, extrude=False):
-        if command == 'back':
-            self.move(y=self.y_pos + self.increment, extrude=extrude)
-        elif command == 'forward':
-            self.move(y=self.y_pos - self.increment, extrude=extrude)
-        elif command == 'left':
-            self.move(x=self.x_pos - self.increment, extrude=extrude)
-        elif command == 'right':
-            self.move(x=self.x_pos + self.increment, extrude=extrude)
-        elif command == 'up':
-            self.move(z=self.z_pos + self.increment, extrude=extrude)
-        elif command == 'down':
-            self.move(z=self.z_pos - self.increment, extrude=extrude)
-
-    def run(self):
-        while self.running:
-            if not self.command_queue.empty():
-                command = self.command_queue.get()
-
-                # Check if there's a gift in the gift queue
-                if self.total_filament >= self.extrude_amount:
-                    print("Gift detected, extruding filament!")
-                    # self.move(x=self.x_pos, y=self.y_pos, z=self.z_pos, extrude=True)
-                    self.process_command(command, extrude=True)
-                else:
-                    self.process_command(command)
-
-            time.sleep(0.1)  # Small delay to prevent busy-waiting
-
-    def stop(self):
-        self.running = False
-
-
-class DummyPrinter:
-    XMAX = 200
-    YMAX = 200
-    ZMAX = 200
-
-    def __init__(self):
-        self.x_pos = 0
-        self.y_pos = 0
-        self.z_pos = 0
-        self.increment = 10  # Movement increment (in mm)
-        self.extrude_amount = 2  # Extrusion amount (in mm of filament)
-        self.feedrate = 1500  # Default feedrate (in mm/min)
-        self.command_queue = Queue(maxsize=10)
-        self.total_filament = 100
-        self.running = True
+class SimulatedPrinter(BasePrinter):
+    def setup_printer(self):
         self.hotend_temp = 0
+        self.logger.info("Simulated printer initialized")
+        self.heat_hotend(self.config.extrude_temp)
+        self.home()
 
-    def send_gcode(self, command):
-        print(f"Dummy Printer received command: {command}")
-        time.sleep(random.uniform(0.1, 0.5))  # Simulate command execution time
+    def send_gcode(self, command: str) -> str:
+        self.logger.debug(f"Simulated command: {command}")
+        if self.config.simulation['random_delay']['enabled']:
+            time.sleep(random.uniform(
+                self.config.simulation['random_delay']['min'],
+                self.config.simulation['random_delay']['max']
+            ))
         return "ok"
 
-    def heat_hotend(self, target_temp=210):
-        print(f"Dummy Printer heating hotend to {target_temp}C...")
+    def heat_hotend(self, target_temp: int) -> None:
+        self.logger.info(f"Simulating heating to {target_temp}°C")
         while self.hotend_temp < target_temp:
             self.hotend_temp += random.uniform(10, 25)
-            print(f"Current hotend temperature: {self.hotend_temp:.1f}C")
+            self.logger.debug(f"Current temperature: {self.hotend_temp:.1f}°C")
             time.sleep(1)
-        print("Hotend reached target temperature.")
+        self.logger.info("Target temperature reached")
 
-    def home(self):
-        print("Homing printer...")
-        _ = self.send_gcode("G28\n")
-        self.x_pos = 0
-        self.y_pos = 0
-        self.z_pos = 0
+    def home(self) -> None:
+        self.logger.info("Simulating homing sequence")
+        self.send_gcode("G28")
+        self.x_pos = self.y_pos = self.z_pos = 0
+        self.send_gcode("M83")
 
-        # set printer extruder to relative mode
-        # all other movements are absolute
-        _ = self.send_gcode("M83\n")
 
-    def move(self, x=None, y=None, z=None, extrude=False):
-        command = f"G{'1' if extrude else '0'} "
+def create_printer(config_file: str) -> BasePrinter:
+    with open(config_file, 'r') as f:
+        config = json.load(f)
 
-        if x is not None:
-            new_pos = max(0, min(self.XMAX, x))
-            if not new_pos == self.x_pos:
-                self.x_pos = new_pos
-                command += f"X{self.x_pos} "
-            else:
-                command = None
+    printer_config = PrinterConfig(**config['printer'])
 
-        if y is not None:
-            new_pos = max(0, min(self.YMAX, y))
-            if not new_pos == self.y_pos:
-                self.y_pos = new_pos
-                command += f"Y{self.y_pos} "
-            else:
-                command = None
-
-        if z is not None:
-            new_pos = max(0, min(self.ZMAX, z))
-            if not new_pos == self.z_pos:
-                self.z_pos = new_pos
-                command += f"Z{self.z_pos} "
-            else:
-                command = None
-
-        if command is not None:
-            if extrude:
-                command += f"E{self.extrude_amount * 5} "
-                self.total_filament -= self.extrude_amount
-
-            command += f"F{self.feedrate}\n"
-            self.send_gcode(command)
-
-    def process_command(self, command, extrude=False):
-        if command == 'back':
-            self.move(y=self.y_pos + self.increment, extrude=extrude)
-        elif command == 'forward':
-            self.move(y=self.y_pos - self.increment, extrude=extrude)
-        elif command == 'left':
-            self.move(x=self.x_pos - self.increment, extrude=extrude)
-        elif command == 'right':
-            self.move(x=self.x_pos + self.increment, extrude=extrude)
-        elif command == 'up':
-            self.move(z=self.z_pos + self.increment, extrude=extrude)
-        elif command == 'down':
-            self.move(z=self.z_pos - self.increment, extrude=extrude)
-
-    def run(self):
-        while self.running:
-            if not self.command_queue.empty():
-                command = self.command_queue.get()
-
-                # Check if there's a gift in the gift queue
-                if self.total_filament >= self.extrude_amount:
-                    print("Gift detected, extruding filament!")
-                    # self.move(x=self.x_pos, y=self.y_pos, z=self.z_pos, extrude=True)
-                    self.process_command(command, extrude=True)
-                else:
-                    print("print moving!")
-                    self.process_command(command)
-
-            time.sleep(1)  # Small delay to prevent busy-waiting
-
-    def stop(self):
-        self.running = False
+    if config['printer']['simulation']['enabled']:
+        return SimulatedPrinter(printer_config)
+    return RealPrinter(printer_config)
