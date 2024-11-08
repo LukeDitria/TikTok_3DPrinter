@@ -17,7 +17,10 @@ Control your 3D printer through TikTok live comments and gifts! Let your viewers
    git clone https://github.com/LukeDitria/TikTok_3DPrinter.git
    ```
 2. Connect your 3D printer to the Raspberry Pi via USB
-3. Open a terminal and navigate to the project folder
+3. Navigate to the project folder
+   ```commandline
+   cd TikTok_3DPrinter
+   ```
 4. Run the installation script:ls
    ```bash
    chmod +x install.sh 
