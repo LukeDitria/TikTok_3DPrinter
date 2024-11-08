@@ -21,7 +21,6 @@ class PrinterConfig:
     max_queue_size: int
     simulation: Dict[str, Any]
 
-
 class BasePrinter(ABC):
     def __init__(self, config: PrinterConfig):
         self.config = config
