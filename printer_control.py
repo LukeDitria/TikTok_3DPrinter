@@ -18,8 +18,10 @@ class PrinterConfig:
     extrude_temp: int
     feed_rate: int
     max_dimensions: Dict[str, int]
+    logfile: str
     max_queue_size: int
     simulation: Dict[str, Any]
+
 
 class BasePrinter(ABC):
     def __init__(self, config: PrinterConfig):
@@ -32,6 +34,22 @@ class BasePrinter(ABC):
 
     def setup_logger(self):
         self.logger = logging.getLogger(self.__class__.__name__)
+
+        # Create a file handler for printer-specific logs
+        printer_handler = logging.FileHandler(self.config.logfile)
+        printer_handler.setFormatter(logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        ))
+
+        # Remove any existing handlers and add the new one
+        self.logger.handlers = []
+        self.logger.addHandler(printer_handler)
+
+        # Don't propagate logs to the root logger to avoid duplicate logging
+        self.logger.propagate = False
+
+        # Set the log level (you can adjust this as needed)
+        self.logger.setLevel(logging.INFO)
 
     @abstractmethod
     def setup_printer(self):

@@ -11,6 +11,7 @@
             "y": 200,
             "z": 200
         },
+        "logfile": "logs/printer_stream.log"
         "max_queue_size": 10,
         "simulation": {
             "enabled": false,
@@ -31,6 +32,6 @@
     "logging": {
         "level": "INFO",
         "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        "file": "logs/printer_stream.log"
+        "file": "logs/stream.log"
     }
 }
