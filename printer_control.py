@@ -158,7 +158,8 @@ class RealPrinter(BasePrinter):
         while True:
             response = self.serial.readline().decode().strip()
             if response:
-                print(f"Printer response: {response}")
+                self.logger.info(f"Printer response: {response}")
+
             if response[:2] == "ok":
                 break
 
