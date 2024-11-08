@@ -94,6 +94,7 @@ class BasePrinter(ABC):
                 command += f" E{self.config.extrude_amount}"
                 self.total_filament -= self.config.extrude_amount
             command += f" F{self.config.feed_rate}"
+            self.logger.info(f"Sending command {command}")
             self.send_gcode(command)
 
             self.x_pos, self.y_pos, self.z_pos = new_x, new_y, new_z
@@ -201,7 +202,7 @@ class SimulatedPrinter(BasePrinter):
     def heat_hotend(self, target_temp: int) -> None:
         self.logger.info(f"Simulating heating to {target_temp}°C")
         while self.hotend_temp < target_temp:
-            self.hotend_temp += random.uniform(10, 25)
+            self.hotend_temp += random.uniform(20, 50)
             self.logger.debug(f"Current temperature: {self.hotend_temp:.1f}°C")
             time.sleep(1)
         self.logger.info("Target temperature reached")
