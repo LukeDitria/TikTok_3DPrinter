@@ -42,20 +42,13 @@ async def on_gift(event):
         printer.total_filament += total_gift_coins
         printer.logger.info(f"Received {event.gift.name} worth {total_gift_coins} coins. Total: {printer.total_filament}")
 
-async def run_client():
-    while True:
-        try:
-            await client.start()
-        except Exception as e:
-            print(f"Connection error: {e}, reconnecting in 5 seconds...")
-            await asyncio.sleep(5)
 
 if __name__ == '__main__':
     printer_thread = Thread(target=printer.run)
     printer_thread.start()
 
     try:
-        asyncio.run(run_client())
+        client.run()
     except KeyboardInterrupt:
         print("Stopping program...")
     finally:
