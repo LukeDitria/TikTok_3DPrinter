@@ -11,6 +11,8 @@ with open("config.json", "r") as f:
     config = json.load(f)
 
 printer = create_printer("config.json")
+printer.setup_printer()
+
 client = TikTokLiveClient(unique_id=config['tiktok']['unique_id'])
 
 @client.on(ConnectEvent)
