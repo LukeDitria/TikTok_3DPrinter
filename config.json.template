@@ -11,13 +11,9 @@
             "y": 200,
             "z": 200
         },
-        "safety": {
-            "max_extrude_temp": 260,
-            "min_extrude_temp": 180,
-            "max_queue_size": 10
-        },
+        "max_queue_size": 10,
         "simulation": {
-            "enabled": true,
+            "enabled": false,
             "random_delay": {
                 "enabled": true,
                 "min": 0.1,
@@ -26,11 +22,10 @@
         }
     },
     "tiktok": {
-        "unique_id": "@the_hamster_rave",
+        "unique_id": "@lukeditria",
         "reconnect_delay": 5,
         "commands": {
             "movement": ["back", "forward", "left", "right", "up", "down"],
-            "gift_to_filament_ratio": 1.0
         }
     },
     "logging": {

@@ -5,6 +5,7 @@ Control your 3D printer through TikTok live comments and gifts! Let your viewers
 ## Requirements
 
 - Raspberry Pi (any model with WiFi)
+- Python >= 3.10
 - 3D printer that connects via USB to recieve GCode
 - USB cable to connect printer to Raspberry Pi
 - TikTok account
@@ -14,15 +15,19 @@ Control your 3D printer through TikTok live comments and gifts! Let your viewers
 1. Download this project to your Raspberry Pi
 2. Connect your 3D printer to the Raspberry Pi via USB
 3. Open a terminal and navigate to the project folder
-4. Run the installation script:
+4. Run the installation script:ls
    ```bash
+   chmod +x install.sh 
    ./install.sh
    ```
 5. Follow the prompts to enter your TikTok username and printer port
 6. Start the program:
    ```bash
-   ./start.sh
-   ```
+    ./run.sh start   # Start in background
+    ./run.sh stop    # Stop the program
+    ./run.sh status  # Check if running
+    ./run.sh logs    # View logs
+    ```
 
 ## How It Works
 
@@ -92,8 +97,8 @@ For advanced users who want to modify the behavior:
 2. **Change Temperature Limits**
    - Modify `"max_extrude_temp"` and `"min_extrude_temp"` under "safety"
 
-3. **Adjust Gift-to-Filament Ratio**
-   - Change `"gift_to_filament_ratio"` under "tiktok" > "commands"
+3. **Adjust the amount of filament added per gift amount**
+   - Change `"extrude_amount"` under "tiktok" > "commands"
 
 ## Warning ⚠️
 

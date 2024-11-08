@@ -18,7 +18,7 @@ class PrinterConfig:
     extrude_temp: int
     feed_rate: int
     max_dimensions: Dict[str, int]
-    safety: Dict[str, Any]
+    max_queue_size: int
     simulation: Dict[str, Any]
 
 
@@ -26,7 +26,7 @@ class BasePrinter(ABC):
     def __init__(self, config: PrinterConfig):
         self.config = config
         self.x_pos = self.y_pos = self.z_pos = 0
-        self.command_queue = Queue(maxsize=config.safety['max_queue_size'])
+        self.command_queue = Queue(maxsize=config.max_queue_size)
         self.total_filament = 0
         self.running = True
         self.setup_logger()
@@ -45,9 +45,6 @@ class BasePrinter(ABC):
     @abstractmethod
     def heat_hotend(self, target_temp: int):
         pass
-
-    def validate_temperature(self, temp: int) -> bool:
-        return self.config.safety['min_extrude_temp'] <= temp <= self.config.safety['max_extrude_temp']
 
     def validate_position(self, x: Optional[float] = None, y: Optional[float] = None,
                           z: Optional[float] = None) -> tuple:
@@ -124,8 +121,8 @@ class RealPrinter(BasePrinter):
         self.serial.flushInput()
         self.serial.flushOutput()
 
-        if self.validate_temperature(self.config.extrude_temp):
-            self.heat_hotend(self.config.extrude_temp)
+        self.heat_hotend(self.config.extrude_temp)
+
         self.home()
         self.move(
             x=self.config.max_dimensions['x'] // 2,
