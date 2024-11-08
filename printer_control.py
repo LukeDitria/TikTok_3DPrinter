@@ -138,10 +138,9 @@ class RealPrinter(BasePrinter):
         )
         self.serial.flushInput()
         self.serial.flushOutput()
+        self.home()
 
         self.heat_hotend(self.config.extrude_temp)
-
-        self.home()
 
         self.move(
             x=self.config.max_dimensions['x'] // 2,
