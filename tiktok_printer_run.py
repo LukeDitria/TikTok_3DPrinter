@@ -1,5 +1,6 @@
 import json
 from TikTokLive import TikTokLiveClient
+from TikTokLive.client.logger import LogLevel
 from TikTokLive.events import ConnectEvent, CommentEvent, GiftEvent
 import asyncio
 from threading import Thread
@@ -20,17 +21,18 @@ printer = create_printer("config.json")
 printer.setup_printer()
 
 client = TikTokLiveClient(unique_id=config['tiktok']['unique_id'])
+client.logger.setLevel(LogLevel.INFO.value)
 
 @client.on(ConnectEvent)
 async def on_connect(event):
-    print(f"Connected to @{event.unique_id} (Room ID: {client.room_id})")
+    printer.logger.info(f"Connected to @{event.unique_id} (Room ID: {client.room_id})")
 
 @client.on(CommentEvent)
 async def on_comment(event):
     comment = event.comment.split(" ")[0].lower()
     if comment in ['back', 'forward', 'left', 'right', 'up', 'down']:
         printer.command_queue.put(comment)
-        print(f"{event.user.nickname} -> {event.comment}")
+        printer.logger.info(f"{event.user.nickname} -> {event.comment}")
 
 @client.on(GiftEvent)
 async def on_gift(event):
@@ -38,7 +40,7 @@ async def on_gift(event):
         gift_count = event.repeat_count or 1
         total_gift_coins = gift_count * event.gift.diamond_count
         printer.total_filament += total_gift_coins
-        print(f"Received {event.gift.name} worth {total_gift_coins} coins. Total: {printer.total_filament}")
+        printer.logger.info(f"Received {event.gift.name} worth {total_gift_coins} coins. Total: {printer.total_filament}")
 
 async def run_client():
     while True:
