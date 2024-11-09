@@ -120,7 +120,8 @@ class BasePrinter(ABC):
                     command = self.command_queue.get()
                     should_extrude = self.total_filament >= self.config.extrude_amount
                     self.process_command(command, extrude=should_extrude)
-                time.sleep(0.1)
+                    time.sleep(1)
+                    
             except Exception as e:
                 self.logger.error(f"Error in printer control loop: {e}")
 
