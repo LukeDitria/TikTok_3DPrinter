@@ -138,6 +138,7 @@ class RealPrinter(BasePrinter):
         )
         self.serial.flushInput()
         self.serial.flushOutput()
+
         self.home()
 
         self.heat_hotend(self.config.extrude_temp)
@@ -149,9 +150,9 @@ class RealPrinter(BasePrinter):
         )
 
     def send_gcode(self, command: str) -> str:
-        self.logger.info(f"Sending command: {command.strip()}")
+        self.logger.info(f"Sending command: {command}")
 
-        self.serial.write(command.encode())
+        self.serial.write((command + "\n").encode())
         self.serial.flush()
 
         while True:
@@ -167,6 +168,7 @@ class RealPrinter(BasePrinter):
     def heat_hotend(self, target_temp: int) -> None:
         self.logger.info(f"Heating hotend to {target_temp}°C")
         self.send_gcode(f"M104 S{target_temp}")
+
         while True:
             response = self.send_gcode("M105")
             if "T:" in response:
