@@ -21,6 +21,7 @@ class PrinterConfig:
     logfile: str
     max_queue_size: int
     simulation: Dict[str, Any]
+    z_min: float
 
 
 class BasePrinter(ABC):
@@ -68,7 +69,7 @@ class BasePrinter(ABC):
         max_dim = self.config.max_dimensions
         new_x = min(max(0, x), max_dim['x']) if x is not None else self.x_pos
         new_y = min(max(0, y), max_dim['y']) if y is not None else self.y_pos
-        new_z = min(max(0, z), max_dim['z']) if z is not None else self.z_pos
+        new_z = min(max(self.config.z_min, z), max_dim['z']) if z is not None else self.z_pos
         return new_x, new_y, new_z
 
     def move(self, x: Optional[float] = None, y: Optional[float] = None,
@@ -118,10 +119,10 @@ class BasePrinter(ABC):
             try:
                 if not self.command_queue.empty():
                     command = self.command_queue.get()
-                    should_extrude = self.total_filament >= self.config.extrude_amount
+                    should_extrude = self.total_filament >= 1
                     self.process_command(command, extrude=should_extrude)
                     time.sleep(1)
-                    
+                time.sleep(0.1)
             except Exception as e:
                 self.logger.error(f"Error in printer control loop: {e}")
 
@@ -153,6 +154,7 @@ class RealPrinter(BasePrinter):
     def send_gcode(self, command: str) -> str:
         self.logger.info(f"Sending command: {command}")
 
+        # Need to add a newline character at the end for the gcode to be properly processed
         self.serial.write((command + "\n").encode())
         self.serial.flush()
 

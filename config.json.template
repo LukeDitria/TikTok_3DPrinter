@@ -3,7 +3,7 @@
         "port": "/dev/ttyUSB0",
         "baudrate": 115200,
         "move_increment": 10,
-        "extrude_amount": 5,
+        "extrude_amount": 1,
         "extrude_temp": 240,
         "feed_rate": 1500,
         "max_dimensions": {
@@ -11,6 +11,7 @@
             "y": 200,
             "z": 200
         },
+        "z_min": 0.2,
         "logfile": "logs/printer_stream.log"
         "max_queue_size": 10,
         "simulation": {
