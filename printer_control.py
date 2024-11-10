@@ -93,7 +93,7 @@ class BasePrinter(ABC):
             command += " ".join(updates)
             if extrude:
                 command += f" E{self.config.extrude_amount}"
-                self.total_filament -= self.config.extrude_amount
+                self.total_filament -= 1
             command += f" F{self.config.feed_rate}"
             self.logger.info(f"Sending command {command}")
             self.send_gcode(command)
